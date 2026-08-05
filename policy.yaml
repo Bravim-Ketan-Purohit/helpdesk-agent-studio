@@ -1,0 +1,43 @@
+# Policy configuration — evaluated before presenting a draft and before execution.
+# Default posture: NOTHING auto-approves. Auto-approval is opt-in per action type.
+#
+# Safe candidates for auto-approval (not enabled by default):
+# - jira.comment: reversible, low blast radius, operator can delete
+# - slack.post in internal channels: reversible via delete
+#
+# NOT safe for auto-approval:
+# - payments.refund: irreversible financial action
+# - jira.transition: may trigger downstream automation
+
+actions:
+  jira.comment:
+    requires_approval: true
+    approvers: 1
+    auto_approve: false
+    rate_limit_per_hour: 60
+
+  jira.transition:
+    requires_approval: true
+    approvers: 1
+    auto_approve: false
+    rate_limit_per_hour: 30
+
+  slack.post:
+    requires_approval: true
+    approvers: 1
+    auto_approve: false
+    rate_limit_per_hour: 60
+
+  payments.refund:
+    requires_approval: true
+    approvers: 1
+    thresholds:
+      - over_usd: 50
+        approvers: 2
+      - over_usd: 200
+        approvers: 2
+        step_up_auth: true
+    deny_if:
+      - "customer.flagged"
+      - "amount_usd > 500"
+    rate_limit_per_hour: 10
