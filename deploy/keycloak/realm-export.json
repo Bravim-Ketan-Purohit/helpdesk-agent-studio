@@ -1,0 +1,121 @@
+{
+  "realm": "helpdesk-studio",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "approver",
+        "description": "Can approve standard actions"
+      },
+      {
+        "name": "senior_approver",
+        "description": "Can approve high-value actions (refunds > $50)"
+      },
+      {
+        "name": "auditor",
+        "description": "Read-only access to audit logs"
+      },
+      {
+        "name": "admin",
+        "description": "Full administrative access"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "helpdesk-dashboard",
+      "name": "Helpdesk Dashboard (OIDC)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "rootUrl": "http://localhost:7700",
+      "redirectUris": [
+        "http://localhost:7700/*",
+        "http://localhost:7701/api/oauth/keycloak/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:7700"
+      ],
+      "defaultClientScopes": [
+        "openid",
+        "email",
+        "profile",
+        "roles"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "helpdesk-saml",
+      "name": "Helpdesk Dashboard (SAML)",
+      "enabled": true,
+      "protocol": "saml",
+      "fullScopeAllowed": true,
+      "attributes": {
+        "saml.assertion.signature": "true",
+        "saml_assertion_consumer_url_post": "http://localhost:7701/api/oauth/saml/acs",
+        "saml_single_logout_service_url_redirect": "http://localhost:7701/api/oauth/saml/slo",
+        "saml.force.post.binding": "true",
+        "saml.server.signature": "true",
+        "saml.signature.algorithm": "RSA_SHA256"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "operator1",
+      "email": "operator1@helpdesk.local",
+      "enabled": true,
+      "firstName": "Operator",
+      "lastName": "One",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "operator1",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["approver"]
+    },
+    {
+      "username": "senior_operator",
+      "email": "senior@helpdesk.local",
+      "enabled": true,
+      "firstName": "Senior",
+      "lastName": "Operator",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "senior123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["approver", "senior_approver"]
+    },
+    {
+      "username": "auditor1",
+      "email": "auditor@helpdesk.local",
+      "enabled": true,
+      "firstName": "Audit",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "auditor1",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["auditor"]
+    }
+  ]
+}
