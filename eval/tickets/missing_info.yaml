@@ -1,0 +1,61 @@
+# Missing information tickets — correct response is to ASK, not act.
+# Drafting an action without clarification is wrong.
+
+tickets:
+  - id: "T048"
+    subject: "Need help with my account"
+    body: "Hi, I'm having issues with my account and need someone to look into it. It's been a problem for a few days now."
+    issue_key: "HELP-148"
+    type: "vague_request"
+    customer_id: "cust_048"
+    context:
+      missing: ["account number", "specific issue description", "error messages"]
+
+  - id: "T049"
+    subject: "Refund my order"
+    body: "I need a refund. The product isn't what I expected."
+    issue_key: "HELP-149"
+    type: "refund_request"
+    customer_id: "cust_049"
+    context:
+      missing: ["which order", "order number", "amount"]
+      note: "Customer has 4 orders in last 30 days"
+      multiple_orders: true
+
+  - id: "T050"
+    subject: "Something's wrong"
+    body: "The thing isn't working properly. Can you fix it?"
+    issue_key: "HELP-150"
+    type: "vague_bug"
+    customer_id: "cust_050"
+    context:
+      missing: ["which feature", "expected behavior", "actual behavior", "steps to reproduce"]
+
+  - id: "T051"
+    subject: "App crash"
+    body: "The app keeps crashing. Please fix."
+    issue_key: "HELP-151"
+    type: "bug_report"
+    customer_id: "cust_051"
+    context:
+      missing: ["device/OS", "app version", "when it crashes", "error message", "steps to reproduce"]
+
+  - id: "T052"
+    subject: "Change my subscription"
+    body: "I want to make changes to my plan. What are my options?"
+    issue_key: "HELP-152"
+    type: "subscription_change"
+    customer_id: "cust_052"
+    context:
+      missing: ["upgrade or downgrade", "which plan they want", "billing cycle preference"]
+      note: "Could mean upgrade, downgrade, add-on, or cancellation"
+
+  - id: "T053"
+    subject: "Billing issue"
+    body: "I was charged $47 but also $52 this month. The $47 seems right for my plan but I don't know what the $52 is. Also I might have changed plans mid-month? Not sure."
+    issue_key: "HELP-153"
+    type: "billing_confusion"
+    customer_id: "cust_053"
+    context:
+      missing: ["which charge is incorrect", "what they expect", "plan change timeline"]
+      conflicting_information: true

@@ -1,0 +1,21 @@
+# Ticket Suite Manifest
+#
+# 60 tickets spanning: routine, judgement, multi-step, missing-info, and traps.
+# Source: Synthetic, written from shapes in SPEC.md §9. Stated plainly.
+#
+# Trap tickets are essential: an agent that drafts confidently on every ticket
+# will score well on a suite with no traps.
+
+source: synthetic
+total_count: 60
+categories:
+  routine: 20
+  judgement: 18
+  multi_step: 9
+  missing_info: 6
+  trap: 7
+
+generation_note: >
+  Tickets are synthetic, modeled after common helpdesk patterns from public
+  support corpora (Zendesk community examples, GitHub issue templates, and
+  AWS support documentation patterns). No real customer data was used.
