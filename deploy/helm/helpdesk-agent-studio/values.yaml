@@ -1,0 +1,87 @@
+# Default values for helpdesk-agent-studio.
+# NO SECRETS IN THIS FILE. Use external-secrets or sealed-secrets.
+
+replicaCount:
+  agent: 2
+  executor: 2
+  web: 2
+
+image:
+  agent:
+    repository: helpdesk-agent-studio/agent
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  executor:
+    repository: helpdesk-agent-studio/executor
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  web:
+    repository: helpdesk-agent-studio/web
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+
+ingress:
+  enabled: true
+  className: nginx
+  host: helpdesk.example.com
+  tls:
+    enabled: true
+    secretName: helpdesk-tls
+
+# IdP configuration (Keycloak)
+idp:
+  issuer: "https://keycloak.example.com/realms/helpdesk-studio"
+  clientId: "helpdesk-dashboard"
+  # clientSecret comes from external-secrets, not here
+
+# KMS configuration
+kms:
+  keyId: "alias/helpdesk-studio"
+  region: "us-east-1"
+
+# Resource limits
+resources:
+  agent:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  executor:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  web:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+
+# Probes
+probes:
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+# HPA
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# PDB
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

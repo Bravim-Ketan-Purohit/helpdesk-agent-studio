@@ -1,0 +1,11 @@
+apiVersion: v2
+name: helpdesk-agent-studio
+description: Enterprise helpdesk agent with human-in-the-loop approval boundary
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - helpdesk
+  - agent
+  - approval
+  - trust-boundary

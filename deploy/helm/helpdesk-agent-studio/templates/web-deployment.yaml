@@ -1,0 +1,57 @@
+{{- /*
+Web (BFF) Deployment — Next.js dashboard.
+Holds operator session, talks to FastAPI core over internal interface.
+Never exposes provider tokens to the browser.
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: web
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount.web }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: web
+    spec:
+      serviceAccountName: {{ .Release.Name }}-web
+      containers:
+        - name: web
+          image: "{{ .Values.image.web.repository }}:{{ .Values.image.web.tag }}"
+          imagePullPolicy: {{ .Values.image.web.pullPolicy }}
+          ports:
+            - containerPort: 7700
+              name: http
+          env:
+            - name: API_URL
+              value: "http://{{ .Release.Name }}-agent:7701"
+            - name: KEYCLOAK_ISSUER
+              value: {{ .Values.idp.issuer | quote }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ .Values.idp.clientId | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ .Release.Name }}-web-secrets
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources.web | nindent 12 }}

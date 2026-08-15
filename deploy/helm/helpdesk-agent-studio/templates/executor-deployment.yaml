@@ -1,0 +1,56 @@
+{{- /*
+Executor Deployment — WRITE credentials mounted.
+Separate ServiceAccount from agent. Only component with write access.
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-executor
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/component: executor
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount.executor }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/component: executor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+        app.kubernetes.io/component: executor
+    spec:
+      serviceAccountName: {{ .Release.Name }}-executor
+      containers:
+        - name: executor
+          image: "{{ .Values.image.executor.repository }}:{{ .Values.image.executor.tag }}"
+          imagePullPolicy: {{ .Values.image.executor.pullPolicy }}
+          ports:
+            - containerPort: 7701
+              name: http
+          env:
+            - name: ROLE
+              value: "executor_write"
+            - name: KMS_KEY_ID
+              value: {{ .Values.kms.keyId | quote }}
+            - name: AWS_REGION
+              value: {{ .Values.kms.region | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ .Release.Name }}-executor-secrets
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          resources:
+            {{- toYaml .Values.resources.executor | nindent 12 }}
