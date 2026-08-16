@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "7702:5432"
+    environment:
+      POSTGRES_DB: helpdesk_studio
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: studio_dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    ports:
+      - "7705:8080"
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_RELATIVE_PATH: /
+    command: start-dev
+    volumes:
+      - ./deploy/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:3.4
+    ports:
+      - "7708:4566"
+    environment:
+      SERVICES: kms
+      DEFAULT_REGION: us-east-1
+    volumes:
+      - localstack_data:/var/lib/localstack
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    ports:
+      - "7709:16686"
+      - "7710:4317"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+
+volumes:
+  pgdata:
+  localstack_data:
