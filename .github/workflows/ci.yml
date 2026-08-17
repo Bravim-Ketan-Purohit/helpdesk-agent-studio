@@ -4,52 +4,114 @@ on:
   push:
     branches: [main]
   pull_request:
-  workflow_dispatch:
+    branches: [main]
 
 jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: helpdesk_studio
+          POSTGRES_USER: studio
+          POSTGRES_PASSWORD: studio_dev
+        ports:
+          - 7702:5432
+        options: >-
+          --health-cmd "pg_isready -U studio"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.12"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]" --system
+
+      - name: Lint (ruff)
+        run: ruff check studio/ tests/
+
+      - name: Format check (ruff)
+        run: ruff format --check studio/ tests/
+
+      - name: Type check (mypy)
+        run: mypy studio/approval studio/executor studio/agent studio/audit --ignore-missing-imports
+
+      - name: Boundary tests
+        run: pytest -q -m boundary
+
+      - name: Unit tests
+        run: pytest -q --ignore=tests/test_integration.py
+
+      - name: Start fake providers
+        run: |
+          python -m studio.providers.fakes --port 7704 &
+          sleep 2
+
+      - name: Integration tests (against fakes)
+        run: pytest -q -m integration
+        env:
+          FAKE_PROVIDER_URL: http://localhost:7704
+          APPROVAL_TOKEN_KEY: "test_key_for_ci_at_least_32_bytes_long"
+
   frontend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
 
-      - name: Install, lint, build
-        run: |
-          if [ ! -f web/package.json ]; then
-            echo "No web/package.json yet - scaffold only."
-            exit 0
-          fi
-          cd web
-          npm ci || npm install
-          npm run lint --if-present
-          npm run build --if-present
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
 
-  backend:
+  helm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Install Helm
+        uses: azure/setup-helm@v3
         with:
-          python-version: "3.12"
+          version: v3.14.0
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff pytest
-          if [ -f api/requirements.txt ]; then pip install -r api/requirements.txt; fi
+      - name: Helm lint
+        run: helm lint deploy/helm/helpdesk-agent-studio/
 
-      - name: Lint
-        run: ruff check .
+      - name: Helm template
+        run: helm template test deploy/helm/helpdesk-agent-studio/ > /dev/null
 
-      - name: Test
-        run: |
-          set +e
-          pytest -q
-          code=$?
-          set -e
-          if [ $code -eq 5 ]; then echo "No tests collected yet - passing scaffold."; exit 0; fi
-          exit $code
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7"
+
+      - name: Terraform fmt
+        run: terraform fmt -check
+        working-directory: infra
+
+      - name: Terraform validate
+        run: terraform init -backend=false && terraform validate
+        working-directory: infra
