@@ -128,3 +128,45 @@ secrets required).
 Report honestly with the conditions attached: "64 tickets, 71 % approved unmodified, 20 % approved with
 edits (median edit distance 14 chars), 9 % rejected, 6/7 traps correctly refused; single reviewer against a
 pre-registered rubric" is the deliverable. A bare percentage is not.
+
+---
+
+## Extended stack additions (2026-08-17)
+
+See `SPEC.md` §12–13. Gains: an **MCP server** (read-only), **Keycloak** SSO with **OIDC + SAML**, real
+**AWS KMS** envelope encryption, **Kubernetes + Helm** with **Nginx** ingress, **Terraform**,
+**COMPLIANCE.md**, an explicit **Node BFF** layer, **OpenTelemetry**.
+
+**New ports** (same 7700–7799 block): `7705` Keycloak · `7706` Nginx ingress (local) · `7707` MCP server ·
+`7708` LocalStack KMS · `7709` Jaeger UI · `7710` OTel Collector gRPC.
+
+**New prerequisites:** `mcp`, `authlib` or `python-jose` + `python3-saml`, `boto3`, `cryptography`,
+`opentelemetry-sdk`. Keycloak and LocalStack via compose. For M10: `kind` + `helm`
+(`brew install kind helm`) — a kind cluster is 2–4 GB, so bring sibling stacks down first.
+
+**New hard rules:**
+
+11. **No write tools over MCP. Ever.** Not gated, not flagged, not admin-only. The MCP server is built on
+    `ReadOnlyProvider` types, so there is no write method to expose — keep it that way, and add a test that
+    asserts no write tool can be registered. Authenticate the MCP transport; an unauthenticated MCP server
+    over a real Slack workspace is a data-exfiltration endpoint.
+12. **Approval tokens bind the IdP subject id**, not a local user row. A two-approver rule means two distinct
+    authenticated identities with the right role — never two clicks.
+13. **High-value approvals require step-up re-authentication.** Approving a $500 refund on an eight-hour-old
+    session is exactly the control an auditor asks about.
+14. **Credential separation is an infrastructure boundary too.** In the Helm chart, agent and executor are
+    separate Deployments with separate ServiceAccounts and separate mounted secrets, plus a NetworkPolicy
+    preventing agent pods from reaching provider write endpoints. The type system stops the code; the network
+    stops everything else.
+15. **No secrets in `values.yaml`.** External-secrets or sealed-secrets only.
+16. **Never write "SOC 2 compliant" or "HIPAA compliant"** — anywhere, in any file, in any phrasing. Those are
+    audit outcomes, not properties of code. `COMPLIANCE.md` is framed as *"designed against the SOC 2 / HIPAA
+    control boundaries"* and includes a "not claimed" section. This is the highest-consequence wording rule in
+    the repo: in healthcare-adjacent hiring, an unearned compliance claim ends the process.
+17. **Never put payload contents, tokens, or customer identifiers in span attributes.** Traces leave the
+    cluster; a span attribute is as exfiltrable as a log line. Enforce it with a test.
+18. **Plaintext KMS data keys are never persisted** and are zeroed after use. Encryption without a documented
+    rotation path is theatre — write the re-wrap path.
+
+**New stop-and-ask:** before creating real Slack/Jira/AWS accounts or a KMS CMK; before running a kind cluster
+alongside other stacks on 18 GB.

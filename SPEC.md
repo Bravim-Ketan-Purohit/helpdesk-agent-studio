@@ -325,3 +325,157 @@ not this repo. Report the numbers; don't draft resume copy into the `.tex`.
 | *(new)* draft approval rate | ☐ | `eval/results/`, pre-registered rubric, N and reviewer stated |
 
 Any unchecked row ⇒ `Bravim_Purohit_FDE.tex:134` stays commented.
+
+---
+
+## 12. Extended stack (added 2026-08-17)
+
+This is the enterprise-integration project, so it owns the enterprise-integration stack. Everything here
+reinforces the §4 trust boundary rather than sitting beside it.
+
+### 12.1 MCP server — read-only tools, by construction
+
+Expose the agent's read-only Slack and Jira capabilities as **Model Context Protocol** tools:
+`slack_search_messages`, `slack_get_thread`, `jira_search_issues`, `jira_get_issue`,
+`jira_get_transitions`, `kb_search`.
+
+This is the canonical MCP use case and it *strengthens* §4: the MCP server is built on the
+`ReadOnlyProvider` types, so the entire set of tools exposed to any agent is structurally incapable of
+mutation. There is no `jira_transition_issue` tool to expose, because no write method exists on the type.
+
+Hard rules: **no write tools over MCP, ever** — not gated, not flagged, not admin-only. Approval and
+execution are a separate process with separate credentials, and MCP does not reach them. Tool responses are
+size-capped and redacted the same way logs are. Auth on the MCP transport; an unauthenticated MCP server on
+a real Slack workspace is a data-exfiltration endpoint.
+
+Then this repo becomes usable from Claude Desktop or Claude Code as a read-only helpdesk tool, which is a
+much better demo than a screenshot.
+
+### 12.2 Enterprise identity: SSO via Keycloak
+
+Approvers are named actors in an audit log, so *who they are* is load-bearing. Operator login moves to
+proper enterprise identity:
+
+- **Keycloak**, self-hosted in Docker, as the IdP. It speaks both **OIDC** and **SAML 2.0**, so one
+  container demonstrates both protocols — and it's free and reproducible by anyone who clones the repo,
+  which a hosted IdP is not.
+- **OIDC** authorization-code flow with PKCE for the Next.js dashboard.
+- **SAML 2.0** as a second configured client with assertion signature validation, because enterprise
+  customers still ask for SAML and having wired it is the differentiator.
+- **Roles/groups → policy.** `approver`, `senior_approver`, `auditor`, `admin` mapped from IdP claims. The
+  §4 approver-count and threshold rules read from these, so a refund over $50 requiring two approvers means
+  two *distinct authenticated identities* with the right role — not two clicks.
+- Sessions: short-lived access tokens, refresh rotation, and an explicit **re-authentication requirement for
+  high-value approvals** (step-up auth). Approving a $500 refund on a session opened eight hours ago is
+  exactly the control an auditor asks about.
+- The approval token from §4 binds the **IdP subject id**, not a local user row.
+
+Auth0 is not used: Keycloak covers OIDC and SAML self-hosted, and a reader can run it.
+
+### 12.3 AWS KMS — real envelope encryption
+
+Promote the "KMS-shaped interface" in §6 to actual AWS KMS:
+
+- A CMK per environment. Data keys generated per token record via `GenerateDataKey`; the ciphertext blob is
+  stored alongside the encrypted payload; plaintext data keys are never persisted and are zeroed after use.
+- `oauth_tokens.access_token_enc` uses envelope encryption with the data key, not a static app secret.
+- Key rotation enabled, and a documented re-wrap path — encryption without a rotation story is theatre.
+- Audit-log entries for decrypt operations, so token access is itself auditable.
+- Local dev uses LocalStack KMS or an explicit `LocalKmsProvider` behind the same interface, so no AWS
+  account is needed until deployment.
+
+### 12.4 Kubernetes + Helm — the FDE deliverable
+
+The forward-deployed story is "install this in the customer's cluster", so the deployment artefact is part
+of the product, not an afterthought:
+
+```
+deploy/
+  helm/helpdesk-agent-studio/
+    Chart.yaml
+    values.yaml              # customer-tunable: replicas, ingress host, IdP, KMS key, resources
+    values-example-*.yaml    # a worked example per deployment shape
+    templates/
+      agent-deployment.yaml       # read-only credentials mounted
+      executor-deployment.yaml    # write credentials — separate ServiceAccount
+      web-deployment.yaml
+      ingress.yaml                # Nginx ingress, TLS
+      networkpolicy.yaml          # agent pods cannot reach provider write endpoints
+      externalsecret.yaml         # or sealed-secrets; never plaintext in values
+      hpa.yaml, pdb.yaml, servicemonitor.yaml
+```
+
+The important detail: **§4's credential separation becomes an infrastructure boundary too.** Agent and
+executor are separate Deployments with separate ServiceAccounts, separate mounted secrets, and a
+NetworkPolicy that prevents agent pods from reaching provider write endpoints at all. Defence in depth — the
+type system stops the code, the network stops everything else. That's the part worth talking about.
+
+Requirements: `helm lint` and `helm template` in CI; the chart installs on a local **kind** cluster and the
+smoke suite passes against it; no secret ever in `values.yaml`; resource requests/limits set; probes wired
+to `/healthz` and `/readyz`.
+
+**Nginx** as the ingress controller, terminating TLS and enforcing the OAuth callback path — also the place
+where webhook signature verification's rate limits live.
+
+**Terraform** (`infra/`) for what surrounds the cluster: KMS CMK, IAM roles for service accounts, S3 for
+audit-log archival, VPC. `fmt` + `validate` in CI.
+
+### 12.5 Node.js middle tier, named as such
+
+The Next.js server layer is the BFF and should be documented as one rather than being incidental: route
+handlers and server actions hold session, talk to the FastAPI core over an internal-only interface, and
+never expose provider tokens to the browser. Server components fetch with the operator's session; the
+browser receives rendered state, never credentials. Make the trust boundary between browser → BFF → core
+explicit in the README diagram.
+
+### 12.6 COMPLIANCE.md — controls, not certifications
+
+`COMPLIANCE.md` documenting the actual control boundary: data classification (what customer data enters the
+system and what never does), encryption in transit and at rest, the audit trail and its hash chain, retention
+and deletion, access control and least privilege, the approval boundary as a change-control mechanism, secret
+management, and known gaps.
+
+**Wording rule, and it matters more here than anywhere else in these eight repos:** the document is framed as
+*"designed against SOC 2 and HIPAA control boundaries"* and never as *"SOC 2 compliant"* or *"HIPAA
+compliant"*. Those are audit outcomes, not properties of code. Asserting them without an audit is a
+misrepresentation, and in healthcare-adjacent hiring it is the kind that ends a process. The same rule
+applies to any resume wording derived from this work: describe the controls you implemented, never claim a
+certification.
+
+Include a "not claimed" section listing what would be required for actual certification — a BAA, an audit
+period, a pen test, formal policies. Knowing the gap is the senior signal.
+
+### 12.7 OpenTelemetry
+
+Spans: `ingest_event`, `agent_draft`, `retrieve`, `policy_evaluate`, `present`, `approve`, `execute`,
+`provider_call`. Attributes: `action_id`, `kind`, `policy_result`, `approver_role`, provider, rate-limit
+state. The `present → approve` gap gives operator decision latency for free — which is a metric §9 needs
+anyway.
+
+**Never put payload contents, tokens, or customer identifiers in span attributes.** Traces go to a
+third-party collector in most deployments, and a trace attribute is as exfiltrable as a log line.
+
+## 13. Additional milestones
+
+- **M8 Enterprise identity.** Keycloak with OIDC + SAML clients; role mapping to the policy engine;
+  step-up re-auth for high-value approvals; approval tokens bound to IdP subject; AWS KMS envelope
+  encryption with a documented rotation path.
+- **M9 MCP server.** Six read-only tools built on `ReadOnlyProvider`; authenticated transport; a test
+  asserting no write tool can be registered; demonstrated from an external MCP client.
+- **M10 Deployable.** Helm chart installing on kind with the smoke suite green; agent/executor as separate
+  Deployments with separate ServiceAccounts and a NetworkPolicy blocking agent→write-endpoint traffic;
+  Nginx ingress with TLS; `helm lint`/`template` in CI; Terraform `fmt`/`validate` in CI.
+- **M11 Compliance + observability.** `COMPLIANCE.md` with the "not claimed" section; OTel end to end with
+  the no-payload-in-attributes rule enforced by a test.
+
+### Honest-claims additions
+
+| Claim | Status | Backed by |
+| --- | --- | --- |
+| enterprise SSO (OIDC **and** SAML) | ☐ | Keycloak with both clients working; role-driven policy |
+| approvers are authenticated identities | ☐ | token bound to IdP subject; two-approver rule = two identities |
+| secrets encrypted with a managed KMS | ☐ | envelope encryption + rotation path |
+| deployable into a customer cluster | ☐ | Helm chart installs on kind; smoke suite green |
+| trust boundary enforced in infrastructure | ☐ | separate ServiceAccounts + NetworkPolicy |
+| reusable read-only tooling | ☐ | MCP server queried from an external client |
+| control boundary documented | ☐ | `COMPLIANCE.md`, framed as *designed against*, never *compliant* |
