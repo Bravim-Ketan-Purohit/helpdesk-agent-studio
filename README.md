@@ -133,5 +133,9 @@ Where `SPEC.md` and any other document disagree, `SPEC.md` wins.
 
 ## Status
 
-Scaffold — specified, not yet implemented. This repo reserves ports **7700–7799**; up to eight sibling
+Implemented. Slack and Jira OAuth (`studio/oauth`, `studio/providers`), the drafting agent, the
+human approval gate (`studio/approval`), the immutable audit log (`studio/audit`), the executor, an MCP
+server, and the Next.js dashboard are all built. Local fakes stand in for both SaaS integrations, so the
+system runs fully offline. **This project has no metric yet** — draft approval rate needs 2–3 independent
+reviewers scoring against the pre-registered rubric in `SPEC.md` §9; self-grading it would be worthless. This repo reserves ports **7700–7799**; up to eight sibling
 projects may run at the same time, so nothing here binds outside that block.
